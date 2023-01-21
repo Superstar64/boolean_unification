@@ -131,4 +131,4 @@ adder' terms = any' $ map (all' . zipWith apply [0 ..]) adderRaw
 
 adder c x y cout s = adder' [c, x, y, cout, s]
 
-testAdder = run $ satify $ adder (constant "x") (constant "y") (constant "z") (variable "S") (variable "Cout")
+testAdder = run $ satify $ adder (constant "x") (constant "y") (constant "z") (variable "Cout") (variable "S")
