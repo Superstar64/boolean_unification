@@ -1,0 +1,2 @@
+# Boolean_Unification
+This is an implementation of Boolean Unification in Haskell. This is heavily based of ["Embedding Boolean Expressions into Logic Programming"](https://core.ac.uk/download/pdf/82206645.pdf). 
