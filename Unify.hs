@@ -106,7 +106,7 @@ fresh :: StateT Int IO Term
 fresh = do
   i <- get
   put (i + 1)
-  pure $ variable (show i)
+  pure $ variable ("_" ++ show i)
 
 solve' :: Term -> StateT Int IO [(String, Term)]
 solve' (Const e) | Set.null e = pure []
