@@ -158,4 +158,4 @@ adder c x y cout s = adder' [c, x, y, cout, s]
         "11111"
       ]
 
-testAdder = satify $ adder (constant "x") (constant "y") (constant "z") (variable "Cout") (variable "S")
+testAdder = satify $ adder (constant "c") (constant "x") (constant "y") (variable "Cout") (variable "S")
