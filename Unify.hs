@@ -3,6 +3,9 @@
 module Unify where
 
 import Control.Monad.Trans.State
+import Data.Bifunctor (second)
+import Data.Foldable (fold, traverse_)
+import Data.List (intercalate)
 import Data.Set (Set, union, (\\))
 import qualified Data.Set as Set
 
@@ -30,6 +33,13 @@ data Term
     -- x not in free(a,b)
     Poly String Term Term
   deriving (Show)
+
+pretty (Const c) | Set.null c = "0"
+pretty (Const c) = intercalate " + " $ map product (Set.toList c)
+  where
+    product c | Set.null c = "1"
+    product c = fold c
+pretty (Poly x a b) = x ++ "(" ++ pretty a ++ ") + " ++ pretty b
 
 poly _ (Const a) e | Set.null a = e
 poly x a b = Poly x a b
@@ -91,21 +101,23 @@ fresh = do
   put (i + 1)
   pure $ variable (show i)
 
-solve (Const e) | Set.null e = pure []
-solve (Poly x t1 t2) = do
-  θ <- solve (inc t1 |*| t2)
+solve' (Const e) | Set.null e = pure []
+solve' (Poly x t1 t2) = do
+  θ <- solve' (inc t1 |*| t2)
   u <- fresh
   let apply e = foldr substitute e θ
   pure $ (x, apply $ inc t1 |*| u |+| t2) : θ
-solve (Const c) = fail $ "unification error: " ++ show c
+solve' (Const c) = fail $ "unification error: " ++ show c
+
+run e = evalStateT e 0
+
+solve e = run (solve' e) >>= traverse_ (\(x, e) -> putStrLn $ x ++ " = " ++ pretty e)
 
 satify e = solve (inc e)
 
 unify e1 e2 = solve (e1 |+| e2)
 
-run e = evalStateT e 0
-
-test = run $ unify (variable "x" |*| constant "a") (constant "a")
+test = unify (variable "x" |*| constant "a") (constant "a")
 
 adderRaw =
   [ "00000",
@@ -131,4 +143,4 @@ adder' terms = any' $ map (all' . zipWith apply [0 ..]) adderRaw
 
 adder c x y cout s = adder' [c, x, y, cout, s]
 
-testAdder = run $ satify $ adder (constant "x") (constant "y") (constant "z") (variable "Cout") (variable "S")
+testAdder = satify $ adder (constant "x") (constant "y") (constant "z") (variable "Cout") (variable "S")
