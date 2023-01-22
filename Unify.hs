@@ -24,7 +24,7 @@ class BooleanRing e where
   inc e = e |+| one
 
 data Term
-  = -- vector space of GF(2) (as in paper) of Const
+  = -- vector space of GF(2) (as in paper) of constants
     -- existance in set implies c{x,y....}, where c = 1
     -- ie, {{"a","b"}, {}} = a|*|b |+| 1
     Const (Set (Set String))
@@ -34,6 +34,7 @@ data Term
     Poly String Term Term
   deriving (Show)
 
+pretty :: Term -> String
 pretty (Const c) | Set.null c = "0"
 pretty (Const c) = intercalate " + " $ map product (Set.toList c)
   where
@@ -41,6 +42,7 @@ pretty (Const c) = intercalate " + " $ map product (Set.toList c)
     product c = fold c
 pretty (Poly x a b) = x ++ "(" ++ pretty a ++ ") + " ++ pretty b
 
+poly :: String -> Term -> Term -> Term
 poly _ (Const a) e | Set.null a = e
 poly x a b = Poly x a b
 
@@ -81,6 +83,7 @@ instance BooleanRing Term where
       (e, f) = factor x c
       (g, i) = factor x d
 
+factor :: String -> Term -> (Term, Term)
 factor _ (Const c) = (zero, Const c)
 factor x (Poly x' a b) | x == x' = (a, b)
 factor x (Poly y a b) = (poly y c e, poly y d f)
@@ -88,19 +91,24 @@ factor x (Poly y a b) = (poly y c e, poly y d f)
     (c, d) = factor x a
     (e, f) = factor x b
 
+substitute :: (String, Term) -> Term -> Term
 substitute (x, ex) (Poly x' a b) | x == x' = ex |*| a |+| b
 substitute (x, ex) (Poly x' a b) = variable x' |*| substitute (x, ex) a |+| substitute (x, ex) b
 substitute _ (Const c) = Const c
 
+variable :: String -> Term
 variable x = Poly x one zero
 
+constant :: String -> Term
 constant x = Const $ Set.singleton (Set.singleton x)
 
+fresh :: StateT Int IO Term
 fresh = do
   i <- get
   put (i + 1)
   pure $ variable (show i)
 
+solve' :: Term -> StateT Int IO [(String, Term)]
 solve' (Const e) | Set.null e = pure []
 solve' (Poly x t1 t2) = do
   θ <- solve' (inc t1 |*| t2)
@@ -109,38 +117,45 @@ solve' (Poly x t1 t2) = do
   pure $ (x, apply $ inc t1 |*| u |+| t2) : θ
 solve' (Const c) = fail $ "unification error: " ++ show c
 
+run :: StateT Int IO e -> IO e
 run e = evalStateT e 0
 
+solve :: Term -> IO ()
 solve e = run (solve' e) >>= traverse_ (\(x, e) -> putStrLn $ x ++ " = " ++ pretty e)
 
+satify :: Term -> IO ()
 satify e = solve (inc e)
 
+unify :: Term -> Term -> IO ()
 unify e1 e2 = solve (e1 |+| e2)
 
+test :: IO ()
 test = unify (variable "x" |*| constant "a") (constant "a")
 
-adderRaw =
-  [ "00000",
-    "00101",
-    "01001",
-    "01110",
-    "10001",
-    "10110",
-    "11010",
-    "11111"
-  ]
-
+or' :: Term -> Term -> Term
 or' x y = x |+| y |+| x |*| y
 
+all' :: (Foldable t) => t Term -> Term
 all' = foldr (|*|) one
 
+any' :: (Foldable t) => t Term -> Term
 any' = foldr (or') zero
 
-adder' terms = any' $ map (all' . zipWith apply [0 ..]) adderRaw
-  where
-    apply index '0' = inc $ terms !! index
-    apply index '1' = terms !! index
-
 adder c x y cout s = adder' [c, x, y, cout, s]
+  where
+    adder' terms = any' $ map (all' . zipWith apply [0 ..]) adderRaw
+      where
+        apply index '0' = inc $ terms !! index
+        apply index '1' = terms !! index
+    adderRaw =
+      [ "00000",
+        "00101",
+        "01001",
+        "01110",
+        "10001",
+        "10110",
+        "11010",
+        "11111"
+      ]
 
 testAdder = satify $ adder (constant "x") (constant "y") (constant "z") (variable "Cout") (variable "S")
