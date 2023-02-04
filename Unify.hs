@@ -26,58 +26,58 @@ data Term
   = -- vector space of GF(2) (as in paper) of constants
     -- existance in set implies c{x,y....}, where c = 1
     -- ie, {{"a","b"}, {}} = a|*|b |+| 1
-    Const (Set (Set String))
+    Constant (Set (Set String))
   | -- xa + b
     -- (x `and` a) `xor` b
     -- x not in free(a,b)
-    Poly String Term Term
+    Polynomial String Term Term
   deriving (Show)
 
 pretty :: Term -> String
-pretty (Const c) | Set.null c = "0"
-pretty (Const c) = intercalate " + " $ map product (Set.toList c)
+pretty (Constant c) | Set.null c = "0"
+pretty (Constant c) = intercalate " + " $ map product (Set.toList c)
   where
     product c | Set.null c = "1"
     product c = fold c
-pretty (Poly x a b) = x ++ "(" ++ pretty a ++ ") + " ++ pretty b
+pretty (Polynomial x a b) = x ++ "(" ++ pretty a ++ ") + " ++ pretty b
 
-poly :: String -> Term -> Term -> Term
-poly _ (Const a) e | Set.null a = e
-poly x a b = Poly x a b
+polynomial :: String -> Term -> Term -> Term
+polynomial _ (Constant a) e | Set.null a = e
+polynomial x a b = Polynomial x a b
 
 instance BooleanRing Term where
-  zero = Const $ Set.empty
-  one = Const $ Set.singleton Set.empty
-  Const c |*| Poly x a b = poly x (a |*| Const c) (b |*| Const c)
-  Poly x a b |*| Const c = poly x (Const c |*| a) (Const c |*| b)
-  Const a |*| Const b = foldr (|+|) zero $ do
+  zero = Constant $ Set.empty
+  one = Constant $ Set.singleton Set.empty
+  Constant c |*| Polynomial x a b = polynomial x (a |*| Constant c) (b |*| Constant c)
+  Polynomial x a b |*| Constant c = polynomial x (Constant c |*| a) (Constant c |*| b)
+  Constant a |*| Constant b = foldr (|+|) zero $ do
     a' <- Set.toList a
     b' <- Set.toList b
-    pure $ Const $ Set.singleton $ Set.union a' b'
-  Poly x a b |*| Poly x' c d | x == x' = poly x (f' |+| i' |+| o') l
+    pure $ Constant $ Set.singleton $ Set.union a' b'
+  Polynomial x a b |*| Polynomial x' c d | x == x' = polynomial x (f' |+| i' |+| o') l
     where
       f' = a |*| c
       o' = a |*| d
       i' = b |*| c
       l = b |*| d
-  Poly x a b |*| Poly y c d = f |+| o |+| i |+| l
+  Polynomial x a b |*| Polynomial y c d = f |+| o |+| i |+| l
     where
-      f = poly x (poly y (m |*| (p |+| q) |+| n |*| (p |+| q)) zero) zero
+      f = polynomial x (polynomial y (m |*| (p |+| q) |+| n |*| (p |+| q)) zero) zero
         where
           (m, n) = factor y a
           (p, q) = factor x c
-      o = poly x (a |*| (m |+| n)) zero
+      o = polynomial x (a |*| (m |+| n)) zero
         where
           (m, n) = factor x d
-      i = poly y ((m |+| n) |*| c) zero
+      i = polynomial y ((m |+| n) |*| c) zero
         where
           (m, n) = factor y b
       l = b |*| d
-  Const a |+| Const b = Const $ (a \\ b) `union` (b \\ a)
-  Const c |+| Poly x a b = poly x a (Const c |+| b)
-  Poly x a b |+| Const c = poly x a (b |+| Const c)
-  Poly x a b |+| Poly x' c d | x == x' = poly x (a |+| c) (b |+| d)
-  Poly x a b |+| Poly y c d = poly x (poly y (e |+| i) (k |+| f)) (poly y (g |+| j) (l |+| h))
+  Constant a |+| Constant b = Constant $ (a \\ b) `union` (b \\ a)
+  Constant c |+| Polynomial x a b = polynomial x a (Constant c |+| b)
+  Polynomial x a b |+| Constant c = polynomial x a (b |+| Constant c)
+  Polynomial x a b |+| Polynomial x' c d | x == x' = polynomial x (a |+| c) (b |+| d)
+  Polynomial x a b |+| Polynomial y c d = polynomial x (polynomial y (e |+| i) (k |+| f)) (polynomial y (g |+| j) (l |+| h))
     where
       (e, f) = factor y a
       (g, h) = factor y b
@@ -85,23 +85,23 @@ instance BooleanRing Term where
       (k, l) = factor x d
 
 factor :: String -> Term -> (Term, Term)
-factor _ (Const c) = (zero, Const c)
-factor x (Poly x' a b) | x == x' = (a, b)
-factor x (Poly y a b) = (poly y c e, poly y d f)
+factor _ (Constant c) = (zero, Constant c)
+factor x (Polynomial x' a b) | x == x' = (a, b)
+factor x (Polynomial y a b) = (polynomial y c e, polynomial y d f)
   where
     (c, d) = factor x a
     (e, f) = factor x b
 
 substitute :: (String, Term) -> Term -> Term
-substitute (x, ex) (Poly x' a b) | x == x' = ex |*| a |+| b
-substitute (x, ex) (Poly x' a b) = variable x' |*| substitute (x, ex) a |+| substitute (x, ex) b
-substitute _ (Const c) = Const c
+substitute (x, ex) (Polynomial x' a b) | x == x' = ex |*| a |+| b
+substitute (x, ex) (Polynomial x' a b) = variable x' |*| substitute (x, ex) a |+| substitute (x, ex) b
+substitute _ (Constant c) = Constant c
 
 variable :: String -> Term
-variable x = Poly x one zero
+variable x = Polynomial x one zero
 
 constant :: String -> Term
-constant x = Const $ Set.singleton (Set.singleton x)
+constant x = Constant $ Set.singleton (Set.singleton x)
 
 fresh :: StateT Int IO Term
 fresh = do
@@ -110,13 +110,13 @@ fresh = do
   pure $ variable ("_" ++ show i)
 
 solve' :: Term -> StateT Int IO [(String, Term)]
-solve' (Const e) | Set.null e = pure []
-solve' (Poly x t1 t2) = do
+solve' (Constant e) | Set.null e = pure []
+solve' (Polynomial x t1 t2) = do
   θ <- solve' (inc t1 |*| t2)
   u <- fresh
   let apply e = foldr substitute e θ
   pure $ (x, apply $ inc t1 |*| u |+| t2) : θ
-solve' (Const c) = fail $ "unification error: " ++ show c
+solve' (Constant c) = fail $ "unification error: " ++ show c
 
 run :: StateT Int IO e -> IO e
 run e = evalStateT e 0
