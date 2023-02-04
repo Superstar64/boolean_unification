@@ -3,7 +3,6 @@
 module Unify where
 
 import Control.Monad.Trans.State
-import Data.Bifunctor (second)
 import Data.Foldable (fold, traverse_)
 import Data.List (intercalate)
 import Data.Set (Set, union, (\\))
@@ -78,10 +77,12 @@ instance BooleanRing Term where
   Const c |+| Poly x a b = poly x a (Const c |+| b)
   Poly x a b |+| Const c = poly x a (b |+| Const c)
   Poly x a b |+| Poly x' c d | x == x' = poly x (a |+| c) (b |+| d)
-  Poly x a b |+| Poly y c d = poly x (poly y e (a |+| g)) (poly y f (b |+| i))
+  Poly x a b |+| Poly y c d = poly x (poly y (e |+| i) (k |+| f)) (poly y (g |+| j) (l |+| h))
     where
-      (e, f) = factor x c
-      (g, i) = factor x d
+      (e, f) = factor y a
+      (g, h) = factor y b
+      (i, j) = factor x c
+      (k, l) = factor x d
 
 factor :: String -> Term -> (Term, Term)
 factor _ (Const c) = (zero, Const c)
