@@ -22,38 +22,50 @@ class BooleanRing e where
   inc :: e -> e
   inc e = e |+| one
 
+-- vector space of GF(2) (as in paper) of constants
+-- existance in set implies c{x,y....}, where c = 1
+-- ie, {{"a","b"}, {}} = a|*|b |+| 1
+newtype Space x = Space (Set (Set x))
+  deriving (Show)
+
+instance Ord x => BooleanRing (Space x) where
+  zero = Space $ Set.empty
+  one = Space $ Set.singleton Set.empty
+  Space a |*| Space b = foldr (|+|) zero $ do
+    a' <- Set.toList a
+    b' <- Set.toList b
+    pure $ Space $ Set.singleton $ Set.union a' b'
+  Space a |+| Space b = Space $ (a \\ b) `union` (b \\ a)
+
 data Term
-  = -- vector space of GF(2) (as in paper) of constants
-    -- existance in set implies c{x,y....}, where c = 1
-    -- ie, {{"a","b"}, {}} = a|*|b |+| 1
-    Constant (Set (Set String))
+  = Constant (Space String)
   | -- xa + b
     -- (x `and` a) `xor` b
     -- x not in free(a,b)
     Polynomial String Term Term
   deriving (Show)
 
-pretty :: Term -> String
-pretty (Constant c) | Set.null c = "0"
-pretty (Constant c) = intercalate " + " $ map product (Set.toList c)
+algebraic :: Term -> Space String
+algebraic (Constant c) = c
+algebraic (Polynomial x e1 e2) = Space (Set.singleton $ Set.singleton x) |*| algebraic e1 |+| algebraic e2
+
+pretty :: (x -> String) -> Space x -> String
+pretty f (Space c) | Set.null c = "0"
+pretty f (Space c) = intercalate " + " $ map product (Set.toList c)
   where
     product c | Set.null c = "1"
-    product c = fold c
-pretty (Polynomial x a b) = x ++ "(" ++ pretty a ++ ") + " ++ pretty b
+    product c = intercalate "*" $ map f $ Set.toList c
 
 polynomial :: String -> Term -> Term -> Term
-polynomial _ (Constant a) e | Set.null a = e
+polynomial _ (Constant (Space a)) e | Set.null a = e
 polynomial x a b = Polynomial x a b
 
 instance BooleanRing Term where
-  zero = Constant $ Set.empty
-  one = Constant $ Set.singleton Set.empty
+  zero = Constant $ zero
+  one = Constant $ one
   Constant c |*| Polynomial x a b = polynomial x (a |*| Constant c) (b |*| Constant c)
   Polynomial x a b |*| Constant c = polynomial x (Constant c |*| a) (Constant c |*| b)
-  Constant a |*| Constant b = foldr (|+|) zero $ do
-    a' <- Set.toList a
-    b' <- Set.toList b
-    pure $ Constant $ Set.singleton $ Set.union a' b'
+  Constant a |*| Constant b = Constant $ a |*| b
   Polynomial x a b |*| Polynomial x' c d | x == x' = polynomial x (f' |+| i' |+| o') l
     where
       f' = a |*| c
@@ -73,7 +85,7 @@ instance BooleanRing Term where
         where
           (m, n) = factor y b
       l = b |*| d
-  Constant a |+| Constant b = Constant $ (a \\ b) `union` (b \\ a)
+  Constant a |+| Constant b = Constant $ a |+| b
   Constant c |+| Polynomial x a b = polynomial x a (Constant c |+| b)
   Polynomial x a b |+| Constant c = polynomial x a (b |+| Constant c)
   Polynomial x a b |+| Polynomial x' c d | x == x' = polynomial x (a |+| c) (b |+| d)
@@ -101,16 +113,16 @@ variable :: String -> Term
 variable x = Polynomial x one zero
 
 constant :: String -> Term
-constant x = Constant $ Set.singleton (Set.singleton x)
+constant x = Constant $ Space $ Set.singleton (Set.singleton x)
 
 fresh :: StateT Int IO Term
 fresh = do
   i <- get
   put (i + 1)
-  pure $ variable ("_" ++ show i)
+  pure $ variable ("x" ++ show i)
 
 solve' :: Term -> StateT Int IO [(String, Term)]
-solve' (Constant e) | Set.null e = pure []
+solve' (Constant (Space e)) | Set.null e = pure []
 solve' (Polynomial x t1 t2) = do
   θ <- solve' (inc t1 |*| t2)
   u <- fresh
@@ -122,7 +134,7 @@ run :: StateT Int IO e -> IO e
 run e = evalStateT e 0
 
 solve :: Term -> IO ()
-solve e = run (solve' e) >>= traverse_ (\(x, e) -> putStrLn $ x ++ " = " ++ pretty e)
+solve e = run (solve' e) >>= traverse_ (\(x, e) -> putStrLn $ x ++ " = " ++ pretty id (algebraic e))
 
 satify :: Term -> IO ()
 satify e = solve (inc e)
