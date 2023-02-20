@@ -79,17 +79,25 @@ freeVariables (Space e) = Set.fromList $ do
     Flexible x -> [x]
     Constant _ -> []
 
+-- solve for a single variable in a problem
+-- given a variable to solve for `x` and a problem `e` to solve for
+-- return `(e', r)` where `e'` is the reduced problem and `r` is the solution to x
 solveStep :: String -> Space Variable -> (Space Variable, Space Variable)
 solveStep x e =
   let (t1, t2) = factor (Flexible x) e
    in (inc t1 |*| t2, inc t1 |*| variable x |+| t2)
 
+-- combine a set of problems into a single one
 combine :: BooleanRing e => [e] -> e
 combine problem = inc $ foldr (|*|) one (map inc problem)
 
+-- given a variable split the problem set into problems with and with it
 split :: String -> [Space Variable] -> ([Space Variable], [Space Variable])
-split x problem = (filter (\e -> Set.member x (freeVariables e)) problem, filter (\e -> Set.notMember x (freeVariables e)) problem)
+split x problem = (filter (Set.member x . freeVariables) problem, filter (Set.notMember x . freeVariables) problem)
 
+-- solve a set of problems (for zero) by choosing the least used variable,
+-- then combinating problems that contain that variable and solving for that it
+-- returns a substitution in triangluar form but in reverse
 solveAll :: MonadFail f => [String] -> [Space Variable] -> f [(String, Space Variable)]
 solveAll xs problem = case filter (\(Space e) -> not $ Set.null e) problem of
   [] -> pure []
@@ -99,11 +107,13 @@ solveAll xs problem = case filter (\(Space e) -> not $ Set.null e) problem of
         (simple', answer) = solveStep x (combine simple)
      in ((x, answer) :) <$> solveAll (filter (/= x) xs) (simple' : problem')
 
+-- rename variables that substitute for themself into new ones
 renameAnswers :: Int -> [(String, Space Variable)] -> [(String, Space Variable)]
 renameAnswers _ [] = []
 renameAnswers i ((x, e) : θ) =
   (x, substitute (x, variable $ "_x" ++ show i) e) : renameAnswers (i + 1) θ
 
+-- given a substitution in reverse triangular form, apply future substitutions
 backSubstitute :: [(String, Space Variable)] -> [(String, Space Variable)]
 backSubstitute [] = []
 backSubstitute ((x, e) : θ) =
