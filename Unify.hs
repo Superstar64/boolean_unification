@@ -132,7 +132,7 @@ satifyAllIO :: [Space Variable] -> IO ()
 satifyAllIO e = solveAllIO (map inc e)
 
 solveIO :: Space Variable -> IO ()
-solveIO e = satifyAllIO [e]
+solveIO e = solveAllIO [e]
 
 satifyIO :: Space Variable -> IO ()
 satifyIO e = solveIO (inc e)
