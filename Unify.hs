@@ -93,14 +93,16 @@ split x problem = (filter (Set.member x . freeVariables) problem, filter (Set.no
 -- solve a set of problems (for zero) by choosing the least used variable,
 -- then combinating problems that contain that variable and solving for that it
 -- returns a substitution in triangluar form but in reverse
+solveAllImpl :: MonadFail f => [String] -> [Polynomial Variable] -> f [(String, Polynomial Variable)]
+solveAllImpl xs [] = pure []
+solveAllImpl [] problem = fail $ "unification error" ++ show problem
+solveAllImpl xs problem =
+  let (x, (simple, problem')) = head $ sortOn (length . fst . snd) $ map (\x -> (x, split x problem)) xs
+      (simple', answer) = solveStep x (combine simple)
+   in ((x, answer) :) <$> solveAll (filter (/= x) xs) (simple' : problem')
+
 solveAll :: MonadFail f => [String] -> [Polynomial Variable] -> f [(String, Polynomial Variable)]
-solveAll xs problem = case filter (\(Polynomial e) -> not $ Set.null e) problem of
-  [] -> pure []
-  problem | [] <- xs -> fail $ "unification error" ++ show problem
-  problem -> do
-    let (x, (simple, problem')) = head $ sortOn (length . fst . snd) $ map (\x -> (x, split x problem)) xs
-        (simple', answer) = solveStep x (combine simple)
-     in ((x, answer) :) <$> solveAll (filter (/= x) xs) (simple' : problem')
+solveAll xs problem = solveAllImpl xs (filter (\(Polynomial e) -> not $ Set.null e) problem)
 
 -- rename variables that substitute for themself into new ones
 renameAnswers :: Int -> [(String, Polynomial Variable)] -> [(String, Polynomial Variable)]
