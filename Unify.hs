@@ -95,7 +95,7 @@ split x problem = (filter (Set.member x . freeVariables) problem, filter (Set.no
 -- returns a substitution in triangluar form but in reverse
 solveAllImpl :: MonadFail f => [String] -> [Polynomial Variable] -> f [(String, Polynomial Variable)]
 solveAllImpl xs [] = pure []
-solveAllImpl [] problem = fail $ "unification error" ++ show problem
+solveAllImpl [] problem = fail $ "unification error: [" ++ intercalate "," (map (pretty prettyVariable) problem) ++ "]"
 solveAllImpl xs problem =
   let (x, (simple, problem')) = head $ sortOn (length . fst . snd) $ map (\x -> (x, split x problem)) xs
       (simple', answer) = solveStep x (combine simple)
